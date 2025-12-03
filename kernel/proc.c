@@ -5,6 +5,22 @@
 #include "spinlock.h"
 #include "proc.h"
 #include "defs.h"
+#include "printf.h"
+
+#define NQUEUES 4
+#define TIME_SLICE_0 1    // Queue 0: 1 tick
+#define TIME_SLICE_1 2    // Queue 1: 2 ticks
+#define TIME_SLICE_2 4    // Queue 2: 4 ticks
+#define TIME_SLICE_3 8    // Queue 3: 8 ticks
+#define BOOST_INTERVAL 1000  // Boost every 1000 ticks
+// MLFQ queues - each is a linked list of processes
+struct mlfq_queue {
+  struct proc *head;
+  struct proc *tail;
+};
+
+struct mlfq_queue mlfq[NQUEUES];
+struct spinlock mlfq_lock;
 
 struct cpu cpus[NCPU];
 
@@ -55,6 +71,19 @@ procinit(void)
       initlock(&p->lock, "proc");
       p->state = UNUSED;
       p->kstack = KSTACK((int) (p - proc));
+  }
+
+  for(p = proc; p < &proc[NPROC]; p++) {
+    p->priority = 0;          // Start at highest priority
+    p->queue = 0;             // Start in queue 0
+    p->ticks_in_queue = 0;    // No ticks used yet
+    p->total_ticks = 0;       // No total ticks yet
+    p->boost_ticks = 0;       // No ticks since boost
+  }
+initlock(&mlfq_lock, "mlfq");
+  for(int i = 0; i < NQUEUES; i++) {
+    mlfq[i].head = 0;
+    mlfq[i].tail = 0;
   }
 }
 
@@ -145,7 +174,6 @@ found:
   memset(&p->context, 0, sizeof(p->context));
   p->context.ra = (uint64)forkret;
   p->context.sp = p->kstack + PGSIZE;
-
   return p;
 }
 
@@ -424,42 +452,44 @@ kwait(uint64 addr)
 void
 scheduler(void)
 {
-  struct proc *p;
-  struct cpu *c = mycpu();
+    struct proc *p;
+    struct cpu *c = mycpu();
 
-  c->proc = 0;
-  for(;;){
-    // The most recent process to run may have had interrupts
-    // turned off; enable them to avoid a deadlock if all
-    // processes are waiting. Then turn them back off
-    // to avoid a possible race between an interrupt
-    // and wfi.
-    intr_on();
-    intr_off();
+    c->proc = 0;
+    for(;;){
+        // The most recent process to run may have had interrupts
+        // turned off; enable them to avoid a deadlock if all
+        // processes are waiting. Then turn them back off
+        // to avoid a possible race between an interrupt
+        // and wft.
+        intr_on();
+        intr_off();
 
-    int found = 0;
-    for(p = proc; p < &proc[NPROC]; p++) {
-      acquire(&p->lock);
-      if(p->state == RUNNABLE) {
-        // Switch to chosen process.  It is the process's job
-        // to release its lock and then reacquire it
-        // before jumping back to us.
-        p->state = RUNNING;
-        c->proc = p;
-        swtch(&c->context, &p->context);
+        int found = 0;
+        for(p = proc; p < &proc[NPROC]; p++) {
+            acquire(&p->lock);
+            if(p->state == RUNNABLE) {
+                // Switch to chosen process. It is the process's job
+                // to release its lock and then reacquire it
+                // before jumping back to us.
+              //  printf("scheduler: switching to process %d (name: %s)\n", p->pid, p->name);
+                p->state = RUNNING;
+                c->proc = p;
+                swtch((struct context*)&c->context, (struct context*)&p->context);  // CHANGED FROM switch TO swtch
 
-        // Process is done running for now.
-        // It should have changed its p->state before coming back.
-        c->proc = 0;
-        found = 1;
-      }
-      release(&p->lock);
+                // Process is done running for now.
+                // It should have changed its p->state before coming back.
+                c->proc = 0;
+               // printf("scheduler: process %d yielded\n", p->pid);
+                found = 1;
+            }
+            release(&p->lock);
+        }
+        if(found == 0) {
+            // nothing to run; stop running on this core until an interrupt.
+            asm volatile("wfi");
+        }
     }
-    if(found == 0) {
-      // nothing to run; stop running on this core until an interrupt.
-      asm volatile("wfi");
-    }
-  }
 }
 
 // Switch to scheduler.  Must hold only p->lock
@@ -686,5 +716,45 @@ procdump(void)
       state = "???";
     printf("%d %s %s", p->pid, state, p->name);
     printf("\n");
+  }
+
+
+}
+// Helper function to remove a process from its MLFQ queue
+void
+remove_from_queue(struct proc *p)
+{
+  // If process is not in any queue, return
+  if(p->queue < 0 || p->queue >= NQUEUES)
+    return;
+    
+  // Simple implementation for now - we'll improve later
+  // For now, we'll handle this in the scheduler
+}
+
+// Helper function to add a process to an MLFQ queue
+void
+add_to_queue(struct proc *p, int queue_num)
+{
+  if(queue_num < 0 || queue_num >= NQUEUES)
+    return;
+    
+  p->queue = queue_num;
+  p->ticks_in_queue = 0;
+  
+  // Add to tail of queue (simple implementation)
+  // We'll improve this with proper linked list later
+}
+
+// Get time slice for a queue
+int
+get_time_slice(int queue)
+{
+  switch(queue) {
+    case 0: return TIME_SLICE_0;
+    case 1: return TIME_SLICE_1;
+    case 2: return TIME_SLICE_2;
+    case 3: return TIME_SLICE_3;
+    default: return TIME_SLICE_3;
   }
 }
