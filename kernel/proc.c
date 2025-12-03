@@ -6,6 +6,7 @@
 #include "proc.h"
 #include "defs.h"
 #include "printf.h"
+#include "procinfo.h"
 
 #define NQUEUES 4
 #define TIME_SLICE_0 1    // Queue 0: 1 tick
@@ -757,4 +758,87 @@ get_time_slice(int queue)
     case 3: return TIME_SLICE_3;
     default: return TIME_SLICE_3;
   }
+}
+
+// Global variable to track ticks since last boost
+static uint last_boost_time = 0;
+
+// Priority boosting: move all processes back to highest priority queue
+// This prevents starvation of low-priority processes
+void
+priority_boost(void)
+{
+  struct proc *p;
+  
+  printf("PRIORITY BOOST: Resetting all processes to Q0\n");
+  
+  for(p = proc; p < &proc[NPROC]; p++) {
+    acquire(&p->lock);
+    if(p->state != UNUSED && p->state != ZOMBIE) {
+      // Remove from current queue
+      remove_from_queue(p);
+      
+      // Reset to highest priority
+      p->queue = 0;
+      p->priority = 0;
+      p->ticks_in_queue = 0;
+      p->boost_ticks = 0;
+      
+      // Add to Q0 if runnable
+      if(p->state == RUNNABLE) {
+        add_to_queue(p, 0);
+      }
+    }
+    release(&p->lock);
+  }
+  
+  // Update last boost time
+  acquire(&tickslock);
+  last_boost_time = ticks;
+  release(&tickslock);
+}
+
+// Check if it's time for a priority boost
+void
+check_boost(void)
+{
+  uint current_ticks;
+  
+  acquire(&tickslock);
+  current_ticks = ticks;
+  release(&tickslock);
+  
+  // Boost if BOOST_INTERVAL ticks have passed
+  if(current_ticks - last_boost_time >= BOOST_INTERVAL) {
+    priority_boost();
+  }
+}
+
+int
+getprocinfo(int pid, struct procinfo *info)
+{
+  struct proc *p;
+
+  if(info == 0)
+    return -1;
+
+  for(p = proc; p < &proc[NPROC]; p++){
+    acquire(&p->lock);
+    if(p->pid == pid && p->state != UNUSED){
+      info->pid = p->pid;
+      info->state = p->state;
+      info->base_priority = p->priority;
+      info->current_level = p->queue;
+      info->time_slice_budget = 0;
+      info->total_runtime = p->total_ticks;
+      for(int i = 0; i < 4; i++)
+        info->queue_runtime[i] = 0;
+      safestrcpy(info->name, p->name, 16);
+      release(&p->lock);
+      return 0;
+    }
+    release(&p->lock);
+  }
+
+  return -1;
 }

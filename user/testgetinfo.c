@@ -6,10 +6,11 @@ int
 main()
 {
   struct procinfo pi;
+  int pid = getpid();
   
   printf("Testing getprocinfo system call...\n");
   
-  if(getprocinfo(&pi) < 0) {
+  if(getprocinfo(pid, &pi) < 0) {
     printf("getprocinfo failed\n");
     exit(1);
   }
@@ -17,10 +18,10 @@ main()
   printf("Process Information:\n");
   printf("  PID: %d\n", pi.pid);
   printf("  State: %d\n", pi.state);
-  printf("  Priority: %d\n", pi.priority);
-  printf("  Queue: %d\n", pi.queue);
-  printf("  Ticks in queue: %d\n", pi.ticks);
-  printf("  Total ticks: %d\n", pi.totalticks);
+  printf("  Base Priority: %d\n", pi.base_priority);
+  printf("  Current Level: %d\n", pi.current_level);
+  printf("  Time Slice Budget: %d\n", pi.time_slice_budget);
+  printf("  Total Runtime: %d\n", (int)pi.total_runtime);
   
   exit(0);
 }

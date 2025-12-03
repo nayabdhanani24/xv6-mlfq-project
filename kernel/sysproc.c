@@ -5,6 +5,7 @@
 #include "memlayout.h"
 #include "spinlock.h"
 #include "proc.h"
+#include "procinfo.h"
 #include "vm.h"
 
 uint64
@@ -111,13 +112,22 @@ sys_uptime(void)
 uint64
 sys_getprocinfo(void)
 {
-  printf("getprocinfo: system call invoked\n");
-  printf("Current scheduler: Round-Robin\n");
-  printf("Testing system call - Week 1 deliverable\n");
-  
-  // Get current process info
-  struct proc *p = myproc();
-  printf("Current PID: %d, Name: %s\n", p->pid, p->name);
-  
+  int pid;
+  uint64 uaddr;
+  struct procinfo info;
+
+  argint(0, &pid);
+  argaddr(1, &uaddr);
+  if(getprocinfo(pid, &info) < 0)
+    return -1;
+  if(copyout(myproc()->pagetable, uaddr, (char*)&info, sizeof(info)) < 0)
+    return -1;
+  return 0;
+}
+
+uint64
+sys_boostproc(void)
+{
+  priority_boost();
   return 0;
 }

@@ -98,14 +98,3 @@ struct proc {
   int total_ticks;
   int boost_ticks;
 };
-
-// Process information structure for getprocinfo system call
-struct procinfo {
-  int pid;
-  int state;
-  int priority;
-  int queue;
-  int ticks;
-  int totalticks;
-};
-

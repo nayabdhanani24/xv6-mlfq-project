@@ -106,7 +106,7 @@ $U/usys.S : $U/usys.pl
 	perl $U/usys.pl > $U/usys.S
 
 $U/usys.o : $U/usys.S
-	$(CC) $(CFLAGS) -c -o $U/usys.o $U/usys.S
+	$(CC) $(CFLAGS) -x assembler-with-cpp -c -o $U/usys.o $U/usys.S
 
 $U/_forktest: $U/forktest.o $(ULIB)
 	# forktest has less library code linked in - needs to be small
@@ -147,6 +147,11 @@ UPROGS=\
 	$U/_timeslicetest\
 	$U/_testproc\
 	$U/_testgetinfo\
+	$U/_cpubound\
+	$U/_iobound\
+	$U/_mlfqtest\
+	$U/_schedtest\
+	$U/_starvtest\
 
 fs.img: mkfs/mkfs README $(UPROGS)
 	mkfs/mkfs fs.img README $(UPROGS)
@@ -168,7 +173,7 @@ QEMUGDB = $(shell if $(QEMU) -help | grep -q '^-gdb'; \
 	then echo "-gdb tcp::$(GDBPORT)"; \
 	else echo "-s -p $(GDBPORT)"; fi)
 ifndef CPUS
-CPUS := 3
+CPUS := 1
 endif
 
 QEMUOPTS = -machine virt -bios none -kernel $K/kernel -m 128M -smp $(CPUS) -nographic
