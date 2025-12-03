@@ -107,3 +107,17 @@ sys_uptime(void)
   release(&tickslock);
   return xticks;
 }
+
+uint64
+sys_getprocinfo(void)
+{
+  printf("getprocinfo: system call invoked\n");
+  printf("Current scheduler: Round-Robin\n");
+  printf("Testing system call - Week 1 deliverable\n");
+  
+  // Get current process info
+  struct proc *p = myproc();
+  printf("Current PID: %d, Name: %s\n", p->pid, p->name);
+  
+  return 0;
+}
