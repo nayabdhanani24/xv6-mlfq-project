@@ -895,11 +895,11 @@ getprocinfo(int pid, struct procinfo *info)
       info->state = p->state;
       info->base_priority = p->priority;
       info->current_level = p->queue;
-      info->time_slice_budget = 0;
+      info->time_slice_budget = get_time_slice(p->queue) - p->ticks_in_queue;
       info->total_runtime = p->total_ticks;
       for(int i = 0; i < 4; i++)
         info->queue_runtime[i] = 0;
-      safestrcpy(info->name, p->name, 16);
+      safestrcpy(info->name, p->name, PROCINFO_NAME_MAX);
       release(&p->lock);
       return 0;
     }

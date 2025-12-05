@@ -109,21 +109,7 @@ sys_uptime(void)
   return xticks;
 }
 
-uint64
-sys_getprocinfo(void)
-{
-  int pid;
-  uint64 uaddr;
-  struct procinfo info;
-
-  argint(0, &pid);
-  argaddr(1, &uaddr);
-  if(getprocinfo(pid, &info) < 0)
-    return -1;
-  if(copyout(myproc()->pagetable, uaddr, (char*)&info, sizeof(info)) < 0)
-    return -1;
-  return 0;
-}
+// sys_getprocinfo is defined in getprocinfo.c
 
 uint64
 sys_boostproc(void)

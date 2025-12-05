@@ -5,30 +5,31 @@
 #include "memlayout.h"
 #include "spinlock.h"
 #include "proc.h"
+#include "procinfo.h"
+#include "string.h"
 
-//system call declaration
+// System call wrapper for getprocinfo
+// User calls: getprocinfo(pid, &info)
+// This extracts the arguments and calls the kernel getprocinfo() helper
 uint64
 sys_getprocinfo(void)
 {
-  uint64 addr;  //user pointer to struct procinfo
-  struct procinfo pi;
+  int pid;
+  uint64 uaddr;  // user pointer to struct procinfo
+  struct procinfo info;
   
-  // Get pointer argument from user space
-  if(argaddr(0, &addr) < 0)
+  // Get arguments: pid and pointer to procinfo struct
+  if(argint(0, &pid) < 0)
+    return -1;
+  if(argaddr(1, &uaddr) < 0)
     return -1;
   
-  struct proc *p = myproc();
+  // Call kernel helper function (defined in proc.c)
+  if(getprocinfo(pid, &info) < 0)
+    return -1;
   
-  // Fill in the process info structure
-  pi.pid = p->pid;
-  pi.state = p->state;
-  pi.priority = p->priority;
-  pi.queue = p->queue;
-  pi.ticks = p->ticks_in_queue;
-  pi.totalticks = p->total_ticks;
-  
-  // Copy to user space
-  if(copyout(p->pagetable, addr, (char *)&pi, sizeof(pi)) < 0)
+  // Copy result to user space
+  if(copyout(myproc()->pagetable, uaddr, (char*)&info, sizeof(info)) < 0)
     return -1;
   
   return 0;
