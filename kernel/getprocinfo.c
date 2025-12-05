@@ -6,11 +6,11 @@
 #include "spinlock.h"
 #include "proc.h"
 
-// System call to get process info
+//system call declaration
 uint64
 sys_getprocinfo(void)
 {
-  uint64 addr;  // user pointer to struct procinfo
+  uint64 addr;  //user pointer to struct procinfo
   struct procinfo pi;
   
   // Get pointer argument from user space

@@ -82,6 +82,31 @@ usertrap(void)
 
   // give up the CPU if this is a timer interrupt.
   if(which_dev == 2) {
+    // Timer interrupt - track time slice usage
+    if(p != 0 && p->state == RUNNING) {
+      p->ticks_in_queue++;
+      p->total_ticks++;
+      p->boost_ticks++;
+      
+      // Check if time slice expired for current queue
+      int slice = 0;
+      switch(p->queue) {
+        case 0: slice = 1; break;   // Q0: 1 tick
+        case 1: slice = 2; break;   // Q1: 2 ticks
+        case 2: slice = 4; break;   // Q2: 4 ticks
+        case 3: slice = 8; break;   // Q3: 8 ticks
+        default: slice = 8; break;
+      }
+      
+      // If time slice used up, demote to next lower queue
+      if(p->ticks_in_queue >= slice) {
+        if(p->queue < 3) {  // NQUEUES - 1
+          p->queue++;       // Demote to lower priority queue
+        }
+        p->ticks_in_queue = 0;  // Reset time slice counter
+      }
+    }
+    
     check_boost();
     yield();
   }

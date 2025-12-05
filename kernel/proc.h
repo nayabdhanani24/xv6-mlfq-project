@@ -97,4 +97,5 @@ struct proc {
   int ticks_in_queue;
   int total_ticks;
   int boost_ticks;
+  struct proc *mlfq_next;  // Next process in MLFQ queue (for linked list)
 };

@@ -255,6 +255,13 @@ userinit(void)
   
   p->cwd = namei("/");
 
+  // Initialize MLFQ fields for first process
+  p->queue = 0;
+  p->priority = 0;
+  p->ticks_in_queue = 0;
+  p->total_ticks = 0;
+  p->boost_ticks = 0;
+  
   p->state = RUNNABLE;
 
   release(&p->lock);
@@ -328,6 +335,14 @@ kfork(void)
   release(&wait_lock);
 
   acquire(&np->lock);
+  
+  // Initialize MLFQ fields for new process - start in Q0
+  np->queue = 0;
+  np->priority = 0;
+  np->ticks_in_queue = 0;
+  np->total_ticks = 0;
+  np->boost_ticks = 0;
+  
   np->state = RUNNABLE;
   release(&np->lock);
 
@@ -462,32 +477,42 @@ scheduler(void)
         // turned off; enable them to avoid a deadlock if all
         // processes are waiting. Then turn them back off
         // to avoid a possible race between an interrupt
-        // and wft.
+        // and wfi.
         intr_on();
+        
+        // Check if it's time for priority boost (Week 3)
+        check_boost();
+        
         intr_off();
 
         int found = 0;
-        for(p = proc; p < &proc[NPROC]; p++) {
-            acquire(&p->lock);
-            if(p->state == RUNNABLE) {
-                // Switch to chosen process. It is the process's job
-                // to release its lock and then reacquire it
-                // before jumping back to us.
-              //  printf("scheduler: switching to process %d (name: %s)\n", p->pid, p->name);
-                p->state = RUNNING;
-                c->proc = p;
-                swtch((struct context*)&c->context, (struct context*)&p->context);  // CHANGED FROM switch TO swtch
-
-                // Process is done running for now.
-                // It should have changed its p->state before coming back.
-                c->proc = 0;
-               // printf("scheduler: process %d yielded\n", p->pid);
-                found = 1;
+        // MLFQ: Scan queues from highest priority (Q0) to lowest (Q3)
+        for(int q = 0; q < NQUEUES && !found; q++) {
+            // Scan process table looking for RUNNABLE processes in this queue
+            for(p = proc; p < &proc[NPROC]; p++) {
+                acquire(&p->lock);
+                
+                if(p->state == RUNNABLE && p->queue == q) {
+                    // Found a runnable process in this queue level
+                    p->state = RUNNING;
+                    c->proc = p;
+                    
+                    // Context switch to the process
+                    swtch(&c->context, &p->context);
+                    
+                    // Process has returned (yielded, blocked, or preempted)
+                    c->proc = 0;
+                    found = 1;
+                }
+                release(&p->lock);
+                
+                if(found)
+                    break;
             }
-            release(&p->lock);
         }
+        
         if(found == 0) {
-            // nothing to run; stop running on this core until an interrupt.
+            // No runnable process found; wait for interrupt
             asm volatile("wfi");
         }
     }
@@ -611,6 +636,9 @@ wakeup(void *chan)
       acquire(&p->lock);
       if(p->state == SLEEPING && p->chan == chan) {
         p->state = RUNNABLE;
+        // When waking from I/O, reset ticks_in_queue
+        // This rewards I/O-bound processes by keeping them in higher queues
+        p->ticks_in_queue = 0;
       }
       release(&p->lock);
     }
@@ -728,9 +756,38 @@ remove_from_queue(struct proc *p)
   // If process is not in any queue, return
   if(p->queue < 0 || p->queue >= NQUEUES)
     return;
+  
+  acquire(&mlfq_lock);
+  
+  int q = p->queue;
+  struct proc *prev = 0;
+  struct proc *curr = mlfq[q].head;
+  
+  // Find process in the queue
+  while(curr != 0 && curr != p) {
+    prev = curr;
+    curr = curr->mlfq_next;
+  }
+  
+  // If found, remove it from the linked list
+  if(curr == p) {
+    if(prev == 0) {
+      // Process is at head
+      mlfq[q].head = p->mlfq_next;
+    } else {
+      // Process is in middle or end
+      prev->mlfq_next = p->mlfq_next;
+    }
     
-  // Simple implementation for now - we'll improve later
-  // For now, we'll handle this in the scheduler
+    // Update tail if necessary
+    if(mlfq[q].tail == p) {
+      mlfq[q].tail = prev;
+    }
+    
+    p->mlfq_next = 0;
+  }
+  
+  release(&mlfq_lock);
 }
 
 // Helper function to add a process to an MLFQ queue
@@ -739,12 +796,25 @@ add_to_queue(struct proc *p, int queue_num)
 {
   if(queue_num < 0 || queue_num >= NQUEUES)
     return;
-    
+  
+  acquire(&mlfq_lock);
+  
   p->queue = queue_num;
   p->ticks_in_queue = 0;
+  p->mlfq_next = 0;
   
-  // Add to tail of queue (simple implementation)
-  // We'll improve this with proper linked list later
+  // Add to tail of queue (FIFO within each queue level)
+  if(mlfq[queue_num].tail == 0) {
+    // Queue is empty
+    mlfq[queue_num].head = p;
+    mlfq[queue_num].tail = p;
+  } else {
+    // Add to tail
+    mlfq[queue_num].tail->mlfq_next = p;
+    mlfq[queue_num].tail = p;
+  }
+  
+  release(&mlfq_lock);
 }
 
 // Get time slice for a queue
