@@ -856,6 +856,8 @@ priority_boost(void)
     acquire(&p->lock);
     if(p->state == RUNNABLE || p->state == RUNNING || p->state == SLEEPING) {
       if(p->queue != 0 || p->ticks_in_queue != 0) {
+        printf("  Boosting PID %d: Q%d->Q0 (state=%d, ticks_in_queue=%d)\n", 
+               p->pid, p->queue, p->state, p->ticks_in_queue);
         boosted_count++;
       }
       p->queue = 0;
@@ -865,6 +867,17 @@ priority_boost(void)
   }
   
   printf("  Total processes boosted: %d\n", boosted_count);
+  
+  // Immediately verify boost worked
+  printf("  Verification after boost:\n");
+  for(p = proc; p < &proc[NPROC]; p++) {
+    acquire(&p->lock);
+    if(p->state != UNUSED && p->state != ZOMBIE && p->pid >= 4) {
+      printf("    PID %d: queue=%d, ticks_in_queue=%d, state=%d\n", 
+             p->pid, p->queue, p->ticks_in_queue, p->state);
+    }
+    release(&p->lock);
+  }
 }
 
 int
