@@ -86,7 +86,6 @@ usertrap(void)
     if(p != 0 && p->state == RUNNING) {
       p->ticks_in_queue++;
       p->total_ticks++;
-      p->boost_ticks++;
       
       // Check if time slice expired for current queue
       int slice = 0;
@@ -107,7 +106,6 @@ usertrap(void)
       }
     }
     
-    check_boost();
     yield();
   }
 
@@ -180,7 +178,6 @@ kerneltrap()
 
   // give up the CPU if this is a timer interrupt.
   if(which_dev == 2 && myproc() != 0) {
-    check_boost();
     yield();
   }
 

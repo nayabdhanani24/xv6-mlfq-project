@@ -104,7 +104,6 @@ int             either_copyin(void *dst, int user_src, uint64 src, uint64 len);
 void            procdump(void);
 int             getprocinfo(int pid, struct procinfo *info);
 void            priority_boost(void);
-void            check_boost(void);
 
 // swtch.S
 void            swtch(struct context*, struct context*);

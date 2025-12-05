@@ -23,6 +23,9 @@ struct mlfq_queue {
 struct mlfq_queue mlfq[NQUEUES];
 struct spinlock mlfq_lock;
 
+// Global variable to track ticks since last boost
+static uint last_boost_time = 0;
+
 struct cpu cpus[NCPU];
 
 struct proc proc[NPROC];
@@ -79,13 +82,17 @@ procinit(void)
     p->queue = 0;             // Start in queue 0
     p->ticks_in_queue = 0;    // No ticks used yet
     p->total_ticks = 0;       // No total ticks yet
-    p->boost_ticks = 0;       // No ticks since boost
   }
 initlock(&mlfq_lock, "mlfq");
   for(int i = 0; i < NQUEUES; i++) {
     mlfq[i].head = 0;
     mlfq[i].tail = 0;
   }
+  
+  // Initialize last_boost_time to current ticks to avoid immediate boost
+  acquire(&tickslock);
+  last_boost_time = ticks;
+  release(&tickslock);
 }
 
 // Must be called with interrupts disabled,
@@ -260,7 +267,6 @@ userinit(void)
   p->priority = 0;
   p->ticks_in_queue = 0;
   p->total_ticks = 0;
-  p->boost_ticks = 0;
   
   p->state = RUNNABLE;
 
@@ -341,7 +347,6 @@ kfork(void)
   np->priority = 0;
   np->ticks_in_queue = 0;
   np->total_ticks = 0;
-  np->boost_ticks = 0;
   
   np->state = RUNNABLE;
   release(&np->lock);
@@ -479,11 +484,18 @@ scheduler(void)
         // to avoid a possible race between an interrupt
         // and wfi.
         intr_on();
-        
-        // Check if it's time for priority boost (Week 3)
-        check_boost();
-        
         intr_off();
+
+        // Check if it's time for priority boosting (starvation prevention)
+        acquire(&tickslock);
+        uint64 current_ticks = ticks;
+        if(current_ticks - last_boost_time >= BOOST_INTERVAL) {
+          last_boost_time = current_ticks;
+          release(&tickslock);
+          priority_boost();
+        } else {
+          release(&tickslock);
+        }
 
         int found = 0;
         // MLFQ: Scan queues from highest priority (Q0) to lowest (Q3)
@@ -830,58 +842,29 @@ get_time_slice(int queue)
   }
 }
 
-// Global variable to track ticks since last boost
-static uint last_boost_time = 0;
-
 // Priority boosting: move all processes back to highest priority queue
 // This prevents starvation of low-priority processes
 void
 priority_boost(void)
 {
   struct proc *p;
+  int boosted_count = 0;
   
   printf("PRIORITY BOOST: Resetting all processes to Q0\n");
   
   for(p = proc; p < &proc[NPROC]; p++) {
     acquire(&p->lock);
-    if(p->state != UNUSED && p->state != ZOMBIE) {
-      // Remove from current queue
-      remove_from_queue(p);
-      
-      // Reset to highest priority
-      p->queue = 0;
-      p->priority = 0;
-      p->ticks_in_queue = 0;
-      p->boost_ticks = 0;
-      
-      // Add to Q0 if runnable
-      if(p->state == RUNNABLE) {
-        add_to_queue(p, 0);
+    if(p->state == RUNNABLE || p->state == RUNNING || p->state == SLEEPING) {
+      if(p->queue != 0 || p->ticks_in_queue != 0) {
+        boosted_count++;
       }
+      p->queue = 0;
+      p->ticks_in_queue = 0;
     }
     release(&p->lock);
   }
   
-  // Update last boost time
-  acquire(&tickslock);
-  last_boost_time = ticks;
-  release(&tickslock);
-}
-
-// Check if it's time for a priority boost
-void
-check_boost(void)
-{
-  uint current_ticks;
-  
-  acquire(&tickslock);
-  current_ticks = ticks;
-  release(&tickslock);
-  
-  // Boost if BOOST_INTERVAL ticks have passed
-  if(current_ticks - last_boost_time >= BOOST_INTERVAL) {
-    priority_boost();
-  }
+  printf("  Total processes boosted: %d\n", boosted_count);
 }
 
 int
