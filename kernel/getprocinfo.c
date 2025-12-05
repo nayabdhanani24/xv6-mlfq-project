@@ -6,7 +6,6 @@
 #include "spinlock.h"
 #include "proc.h"
 #include "procinfo.h"
-#include "string.h"
 
 // System call wrapper for getprocinfo
 // User calls: getprocinfo(pid, &info)
@@ -19,10 +18,8 @@ sys_getprocinfo(void)
   struct procinfo info;
   
   // Get arguments: pid and pointer to procinfo struct
-  if(argint(0, &pid) < 0)
-    return -1;
-  if(argaddr(1, &uaddr) < 0)
-    return -1;
+  argint(0, &pid);
+  argaddr(1, &uaddr);
   
   // Call kernel helper function (defined in proc.c)
   if(getprocinfo(pid, &info) < 0)

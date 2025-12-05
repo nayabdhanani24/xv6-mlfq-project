@@ -9,10 +9,10 @@
 #include "procinfo.h"
 
 #define NQUEUES 4
-#define TIME_SLICE_0 1    // Queue 0: 1 tick
-#define TIME_SLICE_1 2    // Queue 1: 2 ticks
-#define TIME_SLICE_2 4    // Queue 2: 4 ticks
-#define TIME_SLICE_3 8    // Queue 3: 8 ticks
+#define TIME_SLICE_0 5    // Queue 0: 5 ticks
+#define TIME_SLICE_1 10   // Queue 1: 10 ticks
+#define TIME_SLICE_2 20   // Queue 2: 20 ticks
+#define TIME_SLICE_3 40   // Queue 3: 40 ticks
 #define BOOST_INTERVAL 1000  // Boost every 1000 ticks
 // MLFQ queues - each is a linked list of processes
 struct mlfq_queue {

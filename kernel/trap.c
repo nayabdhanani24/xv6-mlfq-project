@@ -90,11 +90,11 @@ usertrap(void)
       // Check if time slice expired for current queue
       int slice = 0;
       switch(p->queue) {
-        case 0: slice = 1; break;   // Q0: 1 tick
-        case 1: slice = 2; break;   // Q1: 2 ticks
-        case 2: slice = 4; break;   // Q2: 4 ticks
-        case 3: slice = 8; break;   // Q3: 8 ticks
-        default: slice = 8; break;
+        case 0: slice = 5; break;   // Q0: 5 ticks
+        case 1: slice = 10; break;  // Q1: 10 ticks
+        case 2: slice = 20; break;  // Q2: 20 ticks
+        case 3: slice = 40; break;  // Q3: 40 ticks
+        default: slice = 40; break;
       }
       
       // If time slice used up, demote to next lower queue
