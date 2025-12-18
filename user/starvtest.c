@@ -25,7 +25,7 @@ main(int argc, char *argv[])
   
   // Let CPU-hog run and get demoted
   printf("Letting CPU-hog run for a bit to get demoted...\n");
-  pause(50);
+  pause(20);
   
   // Check its priority
   struct procinfo info;
